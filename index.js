@@ -87,7 +87,7 @@ async function updateMessage() {
     description += `**${name}**\n${status}\n\n`;
 
     // 🔔 Si event commence
-    if (status === "🟢 ACTIVE NOW") {
+    if (status === "🟢 événement en cours") {
       const announceKey = `${name}-${usedTime}`;
 
       if (lastAnnouncedKey !== announceKey) {
@@ -117,7 +117,7 @@ async function updateMessage() {
   const embed = new EmbedBuilder()
     .setColor(0x2b2d31)
     .setDescription(description)
-    .setFooter({ text: "Live countdowns update automatically." });
+    .setFooter({ text: "Les compteurs sont remis automatiquement" });
 
   const messages = await channel.messages.fetch({ limit: 10 });
   const botMessage = messages.find(
