@@ -4,13 +4,8 @@ const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get("/", (req, res) => {
-  res.send("Bot is running!");
-});
-
-app.listen(PORT, () => {
-  console.log(`Web server running on port ${PORT}`);
-});
+app.get("/", (req, res) => res.send("Bot running"));
+app.listen(PORT, () => console.log("Web server started"));
 
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
@@ -19,101 +14,104 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
+const EVENT_DURATION = 20 * 60 * 1000; // 20 minutes
+
 const events = {
   "🎪 Carnival Event": ["01:30", "13:30"],
   "🌑 Darkness Event": ["02:00", "08:00", "20:00"],
   "🌊 Underwater Event": ["04:30", "16:30"],
   "☣️ Toxic Event": ["05:00", "17:00", "23:00"],
-  "🔥❄️🧟 Ice & Fire Zombie Event": ["07:30", "19:30"],
+  "🔥❄️ Ice & Fire Zombie Event": ["07:30", "19:30"],
   "🍀 Lucky Rot Event": ["09:00", "15:00", "21:00"],
   "🗼 Tokyo Event": ["10:30", "22:30"],
   "🍫 Chocolate Event": ["11:00"],
   "❤️ Love Event": ["14:00"]
 };
 
-let activeEvents = {};
-let activePing = null; // { messageId, timestamp }
+let currentActive = null; // { name, startTime, messageId }
 
-function getNextDate(times) {
+function buildEventDate(time) {
   const now = new Date();
-  let nextDate = null;
-  let usedTime = null;
+  const [hour, minute] = time.split(":").map(Number);
 
-  for (const time of times) {
-    const [hour, minute] = time.split(":").map(Number);
-    const eventDate = new Date();
-    eventDate.setUTCHours(hour - 1, minute, 0, 0);
+  const date = new Date();
+  date.setUTCHours(hour - 1, minute, 0, 0);
 
-    if (eventDate < now) {
-      eventDate.setDate(eventDate.getDate() + 1);
-    }
+  if (date < now) date.setDate(date.getDate() + 1);
 
-    if (!nextDate || eventDate < nextDate) {
-      nextDate = eventDate;
-      usedTime = time;
-    }
-  }
-
-  return { nextDate, usedTime };
+  return date;
 }
 
-function getStatus(name, date) {
+function getNextOccurrence(times) {
   const now = new Date();
-  const diff = date.getTime() - now.getTime();
+  let next = null;
 
-  if (activeEvents[name] && now - activeEvents[name] < 20 * 60 * 1000) {
-    return "🟢 événement en cours";
+  for (const t of times) {
+    const d = buildEventDate(t);
+    if (!next || d < next) next = d;
   }
 
-  if (diff <= 60000 && diff >= -60000) {
-    activeEvents[name] = now;
-    return "🟢 événement en cours";
-  }
-
-  const totalMinutes = Math.max(0, Math.floor(diff / 60000));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-
-  if (hours > 0) return `dans ${hours}h ${minutes}m`;
-  return `dans ${minutes}m`;
+  return next;
 }
 
-async function updateMessage() {
+function formatCountdown(date) {
+  const now = new Date();
+  const diff = date - now;
+
+  const minutes = Math.floor(diff / 60000);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+
+  if (h > 0) return `dans ${h}h ${m}m`;
+  return `dans ${m}m`;
+}
+
+async function update() {
   const channel = await client.channels.fetch(CHANNEL_ID);
   const now = new Date();
 
-  // 🔥 Supprime ping après 20 min (même après redémarrage)
-  if (activePing && now - activePing.timestamp >= 20 * 60 * 1000) {
+  // 🔥 Supprimer ping si 20 minutes passées
+  if (currentActive && now - currentActive.startTime >= EVENT_DURATION) {
     try {
-      const msg = await channel.messages.fetch(activePing.messageId);
+      const msg = await channel.messages.fetch(currentActive.messageId);
       await msg.delete();
     } catch {}
-    activePing = null;
+    currentActive = null;
   }
 
   let description = "🌍 **EVENT TIMERS !**\n\n";
 
   for (const [name, times] of Object.entries(events)) {
-    const { nextDate, usedTime } = getNextDate(times);
-    const status = getStatus(name, nextDate);
+    const next = getNextOccurrence(times);
 
-    description += `**${name}**\n${status}\n\n`;
+    let status = formatCountdown(next);
 
-    // 🔔 Envoie ping si event démarre
-    if (status === "🟢 événement en cours") {
-      const announceKey = `${name}-${usedTime}`;
-
-      if (!activePing) {
-        const pingMessage = await channel.send(
+    // 🔔 Détection démarrage
+    if (!currentActive) {
+      const diff = next - now;
+      if (diff <= 60000 && diff >= -60000) {
+        const ping = await channel.send(
           `@everyone 🚨 **${name} vient de commencer !**`
         );
 
-        activePing = {
-          messageId: pingMessage.id,
-          timestamp: now
+        currentActive = {
+          name,
+          startTime: new Date(),
+          messageId: ping.id
         };
       }
     }
+
+    // 🟢 ACTIVE pendant 20 minutes
+    if (
+      currentActive &&
+      currentActive.name === name &&
+      now - currentActive.startTime < EVENT_DURATION
+    ) {
+      status = "🟢 événement en cours ";
+    }
+
+    description += `**${name}**\n${status}\n\n`;
   }
 
   const embed = new EmbedBuilder()
@@ -123,7 +121,7 @@ async function updateMessage() {
 
   const messages = await channel.messages.fetch({ limit: 10 });
   const botMessage = messages.find(
-    msg => msg.author.id === client.user.id && msg.embeds.length > 0
+    m => m.author.id === client.user.id && m.embeds.length > 0
   );
 
   if (botMessage) {
@@ -135,8 +133,8 @@ async function updateMessage() {
 
 client.once("ready", async () => {
   console.log("Bot prêt !");
-  await updateMessage();
-  setInterval(updateMessage, 60000);
+  await update();
+  setInterval(update, 60000);
 });
 
 client.login(TOKEN);
