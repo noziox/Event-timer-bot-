@@ -40,10 +40,16 @@ function getNextEvent() {
     const eventDate = new Date();
     eventDate.setUTCHours(h - 1, m, 0, 0);
 
-    if (eventDate.getTime() > now.getTime()) {
+    const diff = eventDate.getTime() - now.getTime();
+
+    // Si l'event est en train de commencer (dans les 60 dernières secondes)
+    if (diff <= 0 && diff > -60000) {
+      return { ...e, date: eventDate, starting: true };
+    }
+
+    if (diff > 0) {
       return { ...e, date: eventDate };
     }
-  }
 
   const [h, m] = events[0].time.split(":").map(Number);
   const tomorrow = new Date();
@@ -57,11 +63,19 @@ async function updateMessage() {
   const channel = await client.channels.fetch(CHANNEL_ID);
   const next = getNextEvent();
 
+  // 🔔 Si event commence → ping
+  if (next.starting) {
+    await channel.send(`@everyone 🚨 **${next.name} commence maintenant !**`);
+    return; // On laisse le prochain update afficher le suivant
+  }
+
   const embed = new EmbedBuilder()
     .setColor(0x00ffcc)
     .setTitle("⏱️ EVENT TIMER")
     .setDescription(
-      `**${next.name}**\n⏳ Commence <t:${Math.floor(next.date.getTime() / 1000)}:R>`
+      `**${next.name}**\n⏳ Commence <t:${Math.floor(
+        next.date.getTime() / 1000
+      )}:R>`
     )
     .setFooter({ text: "Heure France (UTC+1)" });
 
