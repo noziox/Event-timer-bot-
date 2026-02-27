@@ -35,7 +35,7 @@ function getNextEvent() {
   const now = new Date();
 
   for (const e of events) {
-    const [h, m] = e.time.split(":").map(Number);
+    const [h2, m2] = events[0].time.split(":").map(Number);
 
     const eventDate = new Date();
     eventDate.setUTCHours(h - 1, m, 0, 0);
@@ -54,7 +54,7 @@ function getNextEvent() {
   const [h, m] = events[0].time.split(":").map(Number);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setUTCHours(h - 1, m, 0, 0);
+  tomorrow.setUTCHours(h2 - 1, m2, 0, 0);
 
   return { ...events[0], date: tomorrow };
 }
