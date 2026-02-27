@@ -24,7 +24,7 @@ const events = {
   "🌑 Darkness Event": ["02:00", "08:00", "20:00"],
   "🌊 Underwater Event": ["04:30", "16:30"],
   "☣️ Toxic Event": ["05:00", "17:00", "23:00"],
-  "🔥❄️ Ice & Fire Zombie Event": ["07:30", "19:30"],
+  "🔥❄️🧟 Ice & Fire Zombie Event": ["07:30", "19:30"],
   "🍀 Lucky Rot Event": ["09:00", "15:00", "21:00"],
   "🗼 Tokyo Event": ["10:30", "22:30"],
   "🍫 Chocolate Event": ["11:00"],
@@ -32,10 +32,8 @@ const events = {
 };
 
 let activeEvents = {};
-let activePingMessage = null;
-let lastAnnouncedKey = null;
+let activePing = null; // { messageId, timestamp }
 
-// 🔎 Prochaine occurrence
 function getNextDate(times) {
   const now = new Date();
   let nextDate = null;
@@ -63,7 +61,6 @@ function getStatus(name, date) {
   const now = new Date();
   const diff = date.getTime() - now.getTime();
 
-  // 🔥 Si event actif pendant 20 min
   if (activeEvents[name] && now - activeEvents[name] < 20 * 60 * 1000) {
     return "🟢 événement en cours";
   }
@@ -83,6 +80,16 @@ function getStatus(name, date) {
 
 async function updateMessage() {
   const channel = await client.channels.fetch(CHANNEL_ID);
+  const now = new Date();
+
+  // 🔥 Supprime ping après 20 min (même après redémarrage)
+  if (activePing && now - activePing.timestamp >= 20 * 60 * 1000) {
+    try {
+      const msg = await channel.messages.fetch(activePing.messageId);
+      await msg.delete();
+    } catch {}
+    activePing = null;
+  }
 
   let description = "🌍 **EVENT TIMERS !**\n\n";
 
@@ -92,27 +99,19 @@ async function updateMessage() {
 
     description += `**${name}**\n${status}\n\n`;
 
-    // 🔔 Ping quand event démarre
+    // 🔔 Envoie ping si event démarre
     if (status === "🟢 événement en cours") {
       const announceKey = `${name}-${usedTime}`;
 
-      if (lastAnnouncedKey !== announceKey) {
-        lastAnnouncedKey = announceKey;
-
-        if (activePingMessage) {
-          try { await activePingMessage.delete(); } catch {}
-        }
-
-        activePingMessage = await channel.send(
+      if (!activePing) {
+        const pingMessage = await channel.send(
           `@everyone 🚨 **${name} vient de commencer !**`
         );
 
-        setTimeout(async () => {
-          try {
-            await activePingMessage.delete();
-            activePingMessage = null;
-          } catch {}
-        }, 20 * 60 * 1000);
+        activePing = {
+          messageId: pingMessage.id,
+          timestamp: now
+        };
       }
     }
   }
@@ -120,7 +119,7 @@ async function updateMessage() {
   const embed = new EmbedBuilder()
     .setColor(0x2b2d31)
     .setDescription(description)
-    .setFooter({ text: "Les compteurs sont remis automatiquement." });
+    .setFooter({ text: "Les compteurs sont actualisés automatiquement." });
 
   const messages = await channel.messages.fetch({ limit: 10 });
   const botMessage = messages.find(
