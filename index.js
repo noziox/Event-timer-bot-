@@ -4,7 +4,7 @@ const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 🌐 Serveur pour Render
+// Serveur pour Render
 app.get("/", (req, res) => {
   res.send("Bot is running!");
 });
@@ -16,7 +16,11 @@ app.listen(PORT, () => {
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 
-// 📅 Planning (HEURE FRANCE UTC+1)
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds]
+});
+
+// 📅 TES EVENTS
 const events = [
   { time: "01:30", name: "🎪 Carnival Event" },
   { time: "02:00", name: "🌑 Darkness Event" },
@@ -39,72 +43,53 @@ const events = [
   { time: "23:00", name: "☣️ Toxic Event" }
 ];
 
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
-});
-
-let lastAnnounced = null;
-
-// 🔎 Trouver prochain event (-1 heure fixe)
-function getNextEvent() {
+// 🔎 Calcule prochaine occurrence (-1 heure France)
+function getNextDate(time) {
   const now = new Date();
+  const [hour, minute] = time.split(":").map(Number);
 
-  for (const event of events) {
-    const [hour, minute] = event.time.split(":").map(Number);
+  const eventDate = new Date();
+  eventDate.setUTCHours(hour - 1, minute, 0, 0);
 
-    const eventDate = new Date();
-    eventDate.setUTCHours(hour - 1, minute, 0, 0);
-
-    const diff = eventDate.getTime() - now.getTime();
-
-    // 🔔 Si l'event commence (dans la minute)
-    if (diff <= 0 && diff > -60000) {
-      return { ...event, date: eventDate, starting: true };
-    }
-
-    if (diff > 0) {
-      return { ...event, date: eventDate };
-    }
+  if (eventDate < now) {
+    eventDate.setDate(eventDate.getDate() + 1);
   }
 
-  const [hour, minute] = events[0].time.split(":").map(Number);
-
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setUTCHours(hour - 1, minute, 0, 0);
-
-  return { ...events[0], date: tomorrow };
+  return eventDate;
 }
 
-// 🔄 Mise à jour message
-async function updateMessage() {
-  const channel = await client.channels.fetch(CHANNEL_ID);
-  const next = getNextEvent();
+function getStatus(date) {
+  const now = new Date();
+  const diff = date.getTime() - now.getTime();
 
-  // 🔔 Ping @everyone UNE SEULE FOIS
-  if (next.starting && lastAnnounced !== next.time) {
-    await channel.send(`@everyone 🚨 **${next.name} commence maintenant !**`);
-    lastAnnounced = next.time;
+  if (diff <= 60000 && diff >= -60000) {
+    return "🟢 ACTIVE NOW";
   }
 
-  const now = new Date();
-  const diffMs = next.date.getTime() - now.getTime();
-
-  const totalMinutes = Math.max(0, Math.floor(diffMs / 60000));
+  const totalMinutes = Math.max(0, Math.floor(diff / 60000));
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
 
-  const countdown = `${hours}h ${minutes}m`;
+  if (hours > 0) return `dans ${hours}h ${minutes}m`;
+  return `dans ${minutes}m`;
+}
+
+async function updateMessage() {
+  const channel = await client.channels.fetch(CHANNEL_ID);
+
+  let description = "🌍 **EVENT TIMERS | Live Status**\n\n";
+
+  for (const event of events) {
+    const nextDate = getNextDate(event.time);
+    const status = getStatus(nextDate);
+
+    description += `**${event.name}**\n${status}\n\n`;
+  }
 
   const embed = new EmbedBuilder()
-    .setColor(0x00ffcc)
-    .setTitle("⏱️ EVENT TIMER")
-    .setDescription(
-      `**${next.name}**
-⏳ Dans ${countdown}
-🕒 Heure exacte : ${next.time}`
-    )
-    .setFooter({ text: "Heure France (UTC+1)" });
+    .setColor(0x2b2d31)
+    .setDescription(description)
+    .setFooter({ text: "Live countdowns update automatically." });
 
   const messages = await channel.messages.fetch({ limit: 10 });
   const botMessage = messages.find(
@@ -118,9 +103,9 @@ async function updateMessage() {
   }
 }
 
-client.once("ready", () => {
+client.once("ready", async () => {
   console.log("Bot prêt !");
-  updateMessage();
+  await updateMessage();
   setInterval(updateMessage, 60000);
 });
 
