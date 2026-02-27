@@ -61,7 +61,6 @@ function getNextEvent() {
     }
   }
 
-  // Premier event du lendemain
   const [hour, minute] = events[0].time.split(":").map(Number);
 
   const tomorrow = new Date();
@@ -91,8 +90,7 @@ async function updateMessage() {
     .setDescription(
       `**${next.name}**
 ⏳ Dans ${customCountdown}
-🕒 Heure exacte : ${next.time}
-📅 Timestamp Discord : <t:${Math.floor(next.date.getTime() / 1000)}:R>`
+🕒 Heure exacte : ${next.time}`
     )
     .setFooter({ text: "Heure France (UTC+1)" });
 
