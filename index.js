@@ -4,7 +4,7 @@ const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 🌐 Mini serveur web pour Render (obligatoire)
+// 🌐 Mini serveur pour Render
 app.get("/", (req, res) => {
   res.send("Bot is running!");
 });
@@ -17,7 +17,7 @@ app.listen(PORT, () => {
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 
-// 📅 Planning des events (HEURE FRANCE)
+// 📅 Planning des events (HEURE FRANCE UTC+1)
 const events = [
   { time: "01:30", name: "🎪 Carnival Event" },
   { time: "02:00", name: "🌑 Darkness Event" },
@@ -46,7 +46,7 @@ const client = new Client({
 
 let messageId = null;
 
-// 🔎 Trouver le prochain event (-1 heure pour France UTC+1)
+// 🔎 Trouver le prochain event (-1 heure fixe)
 function getNextEvent() {
   const now = new Date();
 
@@ -54,7 +54,7 @@ function getNextEvent() {
     const [hour, minute] = event.time.split(":").map(Number);
 
     const eventDate = new Date();
-    eventDate.setUTCHours(hour - 1, minute, 0, 0); // ⚠️ -1
+    eventDate.setUTCHours(hour - 1, minute, 0, 0); // ⚠️ -1 pour France
 
     if (eventDate > now) {
       return { ...event, date: eventDate };
@@ -66,7 +66,7 @@ function getNextEvent() {
 
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setUTCHours(hour - 1, minute, 0, 0); // ⚠️ -1
+  tomorrow.setUTCHours(hour - 1, minute, 0, 0);
 
   return { ...events[0], date: tomorrow };
 }
@@ -76,13 +76,23 @@ async function updateMessage() {
   const channel = await client.channels.fetch(CHANNEL_ID);
   const next = getNextEvent();
 
+  const now = new Date();
+  const diffMs = next.date.getTime() - now.getTime();
+
+  const totalMinutes = Math.floor(diffMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  const customCountdown = `${hours}h ${minutes}m`;
+
   const embed = new EmbedBuilder()
     .setColor(0x00ffcc)
     .setTitle("⏱️ EVENT TIMER")
     .setDescription(
-      `**${next.name}**\n⏳ Commence <t:${Math.floor(
-        next.date.getTime() / 1000
-      )}:R>\n🕒 Heure exacte : ${next.time}`
+      `**${next.name}**
+⏳ Dans ${customCountdown}
+🕒 Heure exacte : ${next.time}
+📅 Timestamp Discord : <t:${Math.floor(next.date.getTime() / 1000)}:R>`
     )
     .setFooter({ text: "Heure France (UTC+1)" });
 
