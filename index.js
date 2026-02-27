@@ -17,7 +17,7 @@ const CHANNEL_ID = process.env.CHANNEL_ID;
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
-};
+});
 
 const events = {
   "🎪 Carnival Event": ["01:30", "13:30"],
