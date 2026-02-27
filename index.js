@@ -17,9 +17,8 @@ const CHANNEL_ID = process.env.CHANNEL_ID;
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
-});
+};
 
-// 🔥 EVENTS REGROUPÉS
 const events = {
   "🎪 Carnival Event": ["01:30", "13:30"],
   "🌑 Darkness Event": ["02:00", "08:00", "20:00"],
@@ -32,8 +31,9 @@ const events = {
   "❤️ Love Event": ["14:00"]
 };
 
-let lastAnnouncedKey = null;
+let activeEvents = {};
 let activePingMessage = null;
+let lastAnnouncedKey = null;
 
 // 🔎 Prochaine occurrence
 function getNextDate(times) {
@@ -59,12 +59,18 @@ function getNextDate(times) {
   return { nextDate, usedTime };
 }
 
-function getStatus(date) {
+function getStatus(name, date) {
   const now = new Date();
   const diff = date.getTime() - now.getTime();
 
+  // 🔥 Si event actif pendant 20 min
+  if (activeEvents[name] && now - activeEvents[name] < 20 * 60 * 1000) {
+    return "🟢 événement en cours";
+  }
+
   if (diff <= 60000 && diff >= -60000) {
-    return "🟢 ACTIVE NOW";
+    activeEvents[name] = now;
+    return "🟢 événement en cours";
   }
 
   const totalMinutes = Math.max(0, Math.floor(diff / 60000));
@@ -82,28 +88,25 @@ async function updateMessage() {
 
   for (const [name, times] of Object.entries(events)) {
     const { nextDate, usedTime } = getNextDate(times);
-    const status = getStatus(nextDate);
+    const status = getStatus(name, nextDate);
 
     description += `**${name}**\n${status}\n\n`;
 
-    // 🔔 Si event commence
+    // 🔔 Ping quand event démarre
     if (status === "🟢 événement en cours") {
       const announceKey = `${name}-${usedTime}`;
 
       if (lastAnnouncedKey !== announceKey) {
         lastAnnouncedKey = announceKey;
 
-        // Supprime ancien ping si existe
         if (activePingMessage) {
           try { await activePingMessage.delete(); } catch {}
         }
 
-        // Envoie nouveau ping
         activePingMessage = await channel.send(
           `@everyone 🚨 **${name} vient de commencer !**`
         );
 
-        // Supprime après 20 minutes
         setTimeout(async () => {
           try {
             await activePingMessage.delete();
@@ -117,7 +120,7 @@ async function updateMessage() {
   const embed = new EmbedBuilder()
     .setColor(0x2b2d31)
     .setDescription(description)
-    .setFooter({ text: "Les compteurs sont remis automatiquement" });
+    .setFooter({ text: "Les compteurs sont remis automatiquement." });
 
   const messages = await channel.messages.fetch({ limit: 10 });
   const botMessage = messages.find(
