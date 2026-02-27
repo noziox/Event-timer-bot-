@@ -44,8 +44,6 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-let messageId = null;
-
 // 🔎 Trouver le prochain event (-1 heure fixe)
 function getNextEvent() {
   const now = new Date();
@@ -70,7 +68,7 @@ function getNextEvent() {
   return { ...events[0], date: tomorrow };
 }
 
-// 🔄 Mise à jour du message
+// 🔄 Mise à jour du message (ANTI SPAM)
 async function updateMessage() {
   const channel = await client.channels.fetch(CHANNEL_ID);
   const next = getNextEvent();
@@ -94,12 +92,16 @@ async function updateMessage() {
     )
     .setFooter({ text: "Heure France (UTC+1)" });
 
-  if (!messageId) {
-    const msg = await channel.send({ embeds: [embed] });
-    messageId = msg.id;
+  // 🔎 Cherche le dernier message du bot
+  const messages = await channel.messages.fetch({ limit: 10 });
+  const botMessage = messages.find(
+    msg => msg.author.id === client.user.id
+  );
+
+  if (botMessage) {
+    await botMessage.edit({ embeds: [embed] });
   } else {
-    const msg = await channel.messages.fetch(messageId);
-    await msg.edit({ embeds: [embed] });
+    await channel.send({ embeds: [embed] });
   }
 }
 
