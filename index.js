@@ -3,6 +3,7 @@ const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = "1476554892117151865";
 
+// 📅 Liste des events (heure FRANCE)
 const events = [
   { time: "01:30", name: "🎪 Carnival Event" },
   { time: "02:00", name: "🌑 Darkness Event" },
@@ -31,53 +32,51 @@ const client = new Client({
 
 let messageId = null;
 
+// 🔎 Trouver le prochain event
 function getNextEvent() {
   const now = new Date();
 
-  for (const e of events) {
-    const [h2, m2] = events[0].time.split(":").map(Number);
+  for (const event of events) {
+    const [hourStr, minuteStr] = event.time.split(":");
+    const hour = Number(hourStr);
+    const minute = Number(minuteStr);
 
     const eventDate = new Date();
-    eventDate.setUTCHours(h - 1, m, 0, 0);
+    eventDate.setUTCHours(hour - 1, minute, 0, 0); // France UTC+1
 
-    const diff = eventDate.getTime() - now.getTime();
-
-    // Si l'event est en train de commencer (dans les 60 dernières secondes)
-    if (diff <= 0 && diff > -60000) {
-      return { ...e, date: eventDate, starting: true };
+    if (eventDate.getTime() > now.getTime()) {
+      return { ...event, date: eventDate };
     }
+  }
 
-    if (diff > 0) {
-      return { ...e, date: eventDate };
-    }
+  // Si aucun event restant aujourd'hui → premier de demain
+  const [firstHourStr, firstMinuteStr] = events[0].time.split(":");
+  const firstHour = Number(firstHourStr);
+  const firstMinute = Number(firstMinuteStr);
 
-  const [h, m] = events[0].time.split(":").map(Number);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setUTCHours(h2 - 1, m2, 0, 0);
+  tomorrow.setUTCHours(firstHour - 1, firstMinute, 0, 0);
 
   return { ...events[0], date: tomorrow };
 }
 
+// 🔄 Mettre à jour le message
 async function updateMessage() {
   const channel = await client.channels.fetch(CHANNEL_ID);
-  const next = getNextEvent();
-
-  // 🔔 Si event commence → ping
-  if (next.starting) {
-    await channel.send(`@everyone 🚨 **${next.name} commence maintenant !**`);
-    return; // On laisse le prochain update afficher le suivant
-  }
+  const nextEvent = getNextEvent();
 
   const embed = new EmbedBuilder()
     .setColor(0x00ffcc)
     .setTitle("⏱️ EVENT TIMER")
     .setDescription(
-      `**${next.name}**\n⏳ Commence <t:${Math.floor(
-        next.date.getTime() / 1000
-      )}:R>`
+      `**${nextEvent.name}**\n⏳ Commence <t:${Math.floor(
+        nextEvent.date.getTime() / 1000
+      )}:R>\n🕒 Heure exacte : <t:${Math.floor(
+        nextEvent.date.getTime() / 1000
+      )}:t>`
     )
-    .setFooter({ text: "Heure France (UTC+1)" });
+    .setFooter({ text: "Heure France" });
 
   if (!messageId) {
     const msg = await channel.send({ embeds: [embed] });
@@ -88,6 +87,7 @@ async function updateMessage() {
   }
 }
 
+// 🚀 Lancement
 client.once("ready", () => {
   console.log("Bot prêt !");
   updateMessage();
