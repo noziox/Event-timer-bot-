@@ -19,7 +19,7 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-// 🔥 EVENTS REGROUPÉS PAR NOM
+// 🔥 EVENTS REGROUPÉS
 const events = {
   "🎪 Carnival Event": ["01:30", "13:30"],
   "🌑 Darkness Event": ["02:00", "08:00", "20:00"],
@@ -32,15 +32,17 @@ const events = {
   "❤️ Love Event": ["14:00"]
 };
 
-// 🔎 Prochaine occurrence pour un event
+let lastAnnouncedKey = null;
+let activePingMessage = null;
+
+// 🔎 Prochaine occurrence
 function getNextDate(times) {
   const now = new Date();
-
   let nextDate = null;
+  let usedTime = null;
 
   for (const time of times) {
     const [hour, minute] = time.split(":").map(Number);
-
     const eventDate = new Date();
     eventDate.setUTCHours(hour - 1, minute, 0, 0);
 
@@ -50,10 +52,11 @@ function getNextDate(times) {
 
     if (!nextDate || eventDate < nextDate) {
       nextDate = eventDate;
+      usedTime = time;
     }
   }
 
-  return nextDate;
+  return { nextDate, usedTime };
 }
 
 function getStatus(date) {
@@ -75,13 +78,40 @@ function getStatus(date) {
 async function updateMessage() {
   const channel = await client.channels.fetch(CHANNEL_ID);
 
-  let description = "🌍 **Fruits vs Brainrots | Live Status**\n\n";
+  let description = "🌍 **EVENT TIMERS !**\n\n";
 
   for (const [name, times] of Object.entries(events)) {
-    const nextDate = getNextDate(times);
+    const { nextDate, usedTime } = getNextDate(times);
     const status = getStatus(nextDate);
 
     description += `**${name}**\n${status}\n\n`;
+
+    // 🔔 Si event commence
+    if (status === "🟢 ACTIVE NOW") {
+      const announceKey = `${name}-${usedTime}`;
+
+      if (lastAnnouncedKey !== announceKey) {
+        lastAnnouncedKey = announceKey;
+
+        // Supprime ancien ping si existe
+        if (activePingMessage) {
+          try { await activePingMessage.delete(); } catch {}
+        }
+
+        // Envoie nouveau ping
+        activePingMessage = await channel.send(
+          `@everyone 🚨 **${name} vient de commencer !**`
+        );
+
+        // Supprime après 20 minutes
+        setTimeout(async () => {
+          try {
+            await activePingMessage.delete();
+            activePingMessage = null;
+          } catch {}
+        }, 20 * 60 * 1000);
+      }
+    }
   }
 
   const embed = new EmbedBuilder()
