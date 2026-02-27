@@ -1,9 +1,23 @@
 const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
+const express = require("express");
 
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// 🌐 Mini serveur web pour Render
+app.get("/", (req, res) => {
+  res.send("Bot is running!");
+});
+
+app.listen(PORT, () => {
+  console.log(`Web server running on port ${PORT}`);
+});
+
+// 🔐 Variables Render
 const TOKEN = process.env.TOKEN;
-const CHANNEL_ID = "1476554892117151865";
+const CHANNEL_ID = process.env.CHANNEL_ID;
 
-// 📅 Liste des events (heure FRANCE)
+// 📅 Planning des events (heure FRANCE)
 const events = [
   { time: "01:30", name: "🎪 Carnival Event" },
   { time: "02:00", name: "🌑 Darkness Event" },
@@ -32,31 +46,33 @@ const client = new Client({
 
 let messageId = null;
 
+// 🕒 Obtenir l'heure actuelle FRANCE
+function getNowParis() {
+  return new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Europe/Paris" })
+  );
+}
+
 // 🔎 Trouver le prochain event
 function getNextEvent() {
-  const now = new Date();
+  const now = getNowParis();
 
-  for (const event of events) {
-    const [hourStr, minuteStr] = event.time.split(":");
-    const hour = Number(hourStr);
-    const minute = Number(minuteStr);
+  for (const e of events) {
+    const [h, m] = e.time.split(":").map(Number);
 
-    const eventDate = new Date();
-    eventDate.setUTCHours(hour - 1, minute, 0, 0); // France UTC+1
+    const eventDate = new Date(now);
+    eventDate.setHours(h, m, 0, 0);
 
-    if (eventDate.getTime() > now.getTime()) {
-      return { ...event, date: eventDate };
+    if (eventDate > now) {
+      return { ...e, date: eventDate };
     }
   }
 
-  // Si aucun event restant aujourd'hui → premier de demain
-  const [firstHourStr, firstMinuteStr] = events[0].time.split(":");
-  const firstHour = Number(firstHourStr);
-  const firstMinute = Number(firstMinuteStr);
-
-  const tomorrow = new Date();
+  // Si aucun aujourd'hui → premier demain
+  const [h, m] = events[0].time.split(":").map(Number);
+  const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setUTCHours(firstHour - 1, firstMinute, 0, 0);
+  tomorrow.setHours(h, m, 0, 0);
 
   return { ...events[0], date: tomorrow };
 }
@@ -64,19 +80,17 @@ function getNextEvent() {
 // 🔄 Mettre à jour le message
 async function updateMessage() {
   const channel = await client.channels.fetch(CHANNEL_ID);
-  const nextEvent = getNextEvent();
+  const next = getNextEvent();
 
   const embed = new EmbedBuilder()
     .setColor(0x00ffcc)
     .setTitle("⏱️ EVENT TIMER")
     .setDescription(
-      `**${nextEvent.name}**\n⏳ Commence <t:${Math.floor(
-        nextEvent.date.getTime() / 1000
-      )}:R>\n🕒 Heure exacte : <t:${Math.floor(
-        nextEvent.date.getTime() / 1000
-      )}:t>`
+      `**${next.name}**\n⏳ Commence <t:${Math.floor(
+        next.date.getTime() / 1000
+      )}:R>\n🕒 Heure exacte : ${next.time}`
     )
-    .setFooter({ text: "Heure France" });
+    .setFooter({ text: "Mise à jour automatique • Heure France" });
 
   if (!messageId) {
     const msg = await channel.send({ embeds: [embed] });
@@ -87,11 +101,11 @@ async function updateMessage() {
   }
 }
 
-// 🚀 Lancement
+// 🚀 Démarrage
 client.once("ready", () => {
   console.log("Bot prêt !");
   updateMessage();
-  setInterval(updateMessage, 60000);
+  setInterval(updateMessage, 60 * 1000);
 });
 
 client.login(TOKEN);
