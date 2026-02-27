@@ -4,7 +4,6 @@ const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serveur pour Render
 app.get("/", (req, res) => {
   res.send("Bot is running!");
 });
@@ -20,42 +19,41 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-// 📅 TES EVENTS
-const events = [
-  { time: "01:30", name: "🎪 Carnival Event" },
-  { time: "02:00", name: "🌑 Darkness Event" },
-  { time: "04:30", name: "🌊 Underwater Event" },
-  { time: "05:00", name: "☣️ Toxic Event" },
-  { time: "07:30", name: "🔥❄️ Ice & Fire Zombie Event" },
-  { time: "08:00", name: "🌑 Darkness Event" },
-  { time: "09:00", name: "🍀 Lucky Rot Event" },
-  { time: "10:30", name: "🗼 Tokyo Event" },
-  { time: "11:00", name: "🍫 Chocolate Event" },
-  { time: "13:30", name: "🎪 Carnival Event" },
-  { time: "14:00", name: "❤️ Love Event" },
-  { time: "15:00", name: "🍀 Lucky Rot Event" },
-  { time: "16:30", name: "🌊 Underwater Event" },
-  { time: "17:00", name: "☣️ Toxic Event" },
-  { time: "19:30", name: "🔥❄️ Ice & Fire Zombie Event" },
-  { time: "20:00", name: "🌑 Darkness Event" },
-  { time: "21:00", name: "🍀 Lucky Rot Event" },
-  { time: "22:30", name: "🗼 Tokyo Event" },
-  { time: "23:00", name: "☣️ Toxic Event" }
-];
+// 🔥 EVENTS REGROUPÉS PAR NOM
+const events = {
+  "🎪 Carnival Event": ["01:30", "13:30"],
+  "🌑 Darkness Event": ["02:00", "08:00", "20:00"],
+  "🌊 Underwater Event": ["04:30", "16:30"],
+  "☣️ Toxic Event": ["05:00", "17:00", "23:00"],
+  "🔥❄️ Ice & Fire Zombie Event": ["07:30", "19:30"],
+  "🍀 Lucky Rot Event": ["09:00", "15:00", "21:00"],
+  "🗼 Tokyo Event": ["10:30", "22:30"],
+  "🍫 Chocolate Event": ["11:00"],
+  "❤️ Love Event": ["14:00"]
+};
 
-// 🔎 Calcule prochaine occurrence (-1 heure France)
-function getNextDate(time) {
+// 🔎 Prochaine occurrence pour un event
+function getNextDate(times) {
   const now = new Date();
-  const [hour, minute] = time.split(":").map(Number);
 
-  const eventDate = new Date();
-  eventDate.setUTCHours(hour - 1, minute, 0, 0);
+  let nextDate = null;
 
-  if (eventDate < now) {
-    eventDate.setDate(eventDate.getDate() + 1);
+  for (const time of times) {
+    const [hour, minute] = time.split(":").map(Number);
+
+    const eventDate = new Date();
+    eventDate.setUTCHours(hour - 1, minute, 0, 0);
+
+    if (eventDate < now) {
+      eventDate.setDate(eventDate.getDate() + 1);
+    }
+
+    if (!nextDate || eventDate < nextDate) {
+      nextDate = eventDate;
+    }
   }
 
-  return eventDate;
+  return nextDate;
 }
 
 function getStatus(date) {
@@ -77,13 +75,13 @@ function getStatus(date) {
 async function updateMessage() {
   const channel = await client.channels.fetch(CHANNEL_ID);
 
-  let description = "🌍 **EVENT TIMERS | Live Status**\n\n";
+  let description = "🌍 **Fruits vs Brainrots | Live Status**\n\n";
 
-  for (const event of events) {
-    const nextDate = getNextDate(event.time);
+  for (const [name, times] of Object.entries(events)) {
+    const nextDate = getNextDate(times);
     const status = getStatus(nextDate);
 
-    description += `**${event.name}**\n${status}\n\n`;
+    description += `**${name}**\n${status}\n\n`;
   }
 
   const embed = new EmbedBuilder()
