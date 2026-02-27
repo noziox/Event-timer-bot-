@@ -4,7 +4,7 @@ const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 🌐 Mini serveur web pour Render
+// 🌐 Mini serveur web pour Render (obligatoire)
 app.get("/", (req, res) => {
   res.send("Bot is running!");
 });
@@ -17,7 +17,7 @@ app.listen(PORT, () => {
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 
-// 📅 Planning des events (heure FRANCE)
+// 📅 Planning des events (HEURE FRANCE)
 const events = [
   { time: "01:30", name: "🎪 Carnival Event" },
   { time: "02:00", name: "🌑 Darkness Event" },
@@ -46,38 +46,32 @@ const client = new Client({
 
 let messageId = null;
 
-// 🕒 Obtenir l'heure actuelle FRANCE
-function getNowParis() {
-  return new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Europe/Paris" })
-  );
-}
-
-// 🔎 Trouver le prochain event
+// 🔎 Trouver le prochain event (-1 heure pour France UTC+1)
 function getNextEvent() {
-  const now = getNowParis();
+  const now = new Date();
 
-  for (const e of events) {
-    const [h, m] = e.time.split(":").map(Number);
+  for (const event of events) {
+    const [hour, minute] = event.time.split(":").map(Number);
 
-    const eventDate = new Date(now);
-    eventDate.setHours(h, m, 0, 0);
+    const eventDate = new Date();
+    eventDate.setUTCHours(hour - 1, minute, 0, 0); // ⚠️ -1
 
     if (eventDate > now) {
-      return { ...e, date: eventDate };
+      return { ...event, date: eventDate };
     }
   }
 
-  // Si aucun aujourd'hui → premier demain
-  const [h, m] = events[0].time.split(":").map(Number);
-  const tomorrow = new Date(now);
+  // Premier event du lendemain
+  const [hour, minute] = events[0].time.split(":").map(Number);
+
+  const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(h, m, 0, 0);
+  tomorrow.setUTCHours(hour - 1, minute, 0, 0); // ⚠️ -1
 
   return { ...events[0], date: tomorrow };
 }
 
-// 🔄 Mettre à jour le message
+// 🔄 Mise à jour du message
 async function updateMessage() {
   const channel = await client.channels.fetch(CHANNEL_ID);
   const next = getNextEvent();
@@ -90,7 +84,7 @@ async function updateMessage() {
         next.date.getTime() / 1000
       )}:R>\n🕒 Heure exacte : ${next.time}`
     )
-    .setFooter({ text: "Mise à jour automatique • Heure France" });
+    .setFooter({ text: "Heure France (UTC+1)" });
 
   if (!messageId) {
     const msg = await channel.send({ embeds: [embed] });
@@ -105,7 +99,7 @@ async function updateMessage() {
 client.once("ready", () => {
   console.log("Bot prêt !");
   updateMessage();
-  setInterval(updateMessage, 60 * 1000);
+  setInterval(updateMessage, 60000);
 });
 
 client.login(TOKEN);
