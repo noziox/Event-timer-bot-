@@ -17,15 +17,11 @@ const client = new Client({
 const EVENT_DURATION = 20 * 60 * 1000; // 20 minutes
 
 const events = {
-  "🎪 Carnival Event": ["01:30", "13:30"],
-  "🌑 Darkness Event": ["02:00", "08:00", "20:00"],
-  "🌊 Underwater Event": ["04:30", "16:30"],
-  "☣️ Toxic Event": ["05:00", "17:00", "23:00"],
-  "🔥❄️ Ice & Fire Zombie Event": ["07:30", "19:30"],
-  "🍀 Lucky Rot Event": ["09:00", "15:00", "21:00"],
-  "🗼 Tokyo Event": ["10:30", "22:30"],
-  "🍫 Chocolate Event": ["11:00"],
-  "❤️ Love Event": ["14:00"]
+  "🌑 Void Event": ["01:00", "03:00", "05:00", "07:00", "09:00", "11:00", "13:00", "15:00", "17:00", "19:00", "21:00", "23:00"],
+  "🍀 Lucky Rot Event": ["02:00", "08:00", "14:00", "20:00"],
+  "🍫 Chocolate Event": ["04:30", "13:30"],
+  "❤️ Love Event": ["01:30", "10:30", "19:30"]
+  "☢️ Toxic Event": ["07:30", "10:30", "16:30", "22:30"]
 };
 
 let currentActive = null; // { name, startTime, messageId }
