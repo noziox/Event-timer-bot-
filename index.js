@@ -22,7 +22,7 @@ const events = {
   "🍫 Chocolate Event": ["04:30", "13:30"],
   "❤️ Love Event": ["01:30", "10:30", "19:30"]
   "☢️ Toxic Event": ["07:30", "10:30", "16:30", "22:30"]
-};
+});
 
 let currentActive = null; // { name, startTime, messageId }
 
