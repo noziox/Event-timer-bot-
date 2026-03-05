@@ -133,3 +133,5 @@ client.once("ready", async () => {
 });
 
 client.login(TOKEN);
+
+require("./topclients.js")(client)
