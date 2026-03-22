@@ -27,48 +27,39 @@ function getEmoji(name) {
   return "✨";
 }
 
-// 📥 récupération events (bonne semaine + sans doublons)
+// 📥 récupère UNIQUEMENT le programme quotidien
 async function getEvents() {
   try {
     const { data } = await axios.get(URL);
     const $ = cheerio.load(data);
 
-    const now = new Date();
-    const today = now.getDate();
-
     let events = [];
-    let validSection = false;
+    let inSection = false;
 
     $("h2, h3, p, li").each((i, el) => {
       const text = $(el).text().trim();
 
-      // 🎯 détecte la bonne semaine
-      const match = text.match(/Programme du (\d{1,2}) au (\d{1,2})/i);
-
-      if (match) {
-        const start = parseInt(match[1]);
-        const end = parseInt(match[2]);
-
-        validSection = today >= start && today <= end;
+      // 🎯 début de la bonne section
+      if (text.toLowerCase().includes("programme quotidien")) {
+        inSection = true;
         return;
       }
 
-      // si nouvelle section → stop
-      if (validSection && text.includes("Programme")) {
-        validSection = false;
+      // stop si nouvelle section
+      if (inSection && (text.includes("📅") || text.toLowerCase().includes("programme"))) {
+        inSection = false;
       }
 
-      // récupère uniquement la bonne section
-      if (validSection) {
-        const matches = text.match(/\d{1,2}h\d{0,2}\s*:\s*[^0-9]+/g);
+      if (inSection) {
+        const match = text.match(/(\d{1,2}h\d{0,2})\s*:\s*(.+)/);
 
-        if (matches) {
-          matches.forEach(m => events.push(m.trim()));
+        if (match) {
+          events.push(`${match[1]} : ${match[2]}`);
         }
       }
     });
 
-    // 🔥 suppression doublons
+    // 🔥 supprime doublons
     return [...new Set(events)];
 
   } catch (err) {
@@ -77,7 +68,7 @@ async function getEvents() {
   }
 }
 
-// 🔄 parsing events
+// 🔄 transforme en vrais events
 function parseEvents(events) {
   const now = new Date();
   let parsed = [];
