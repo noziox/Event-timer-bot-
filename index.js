@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const axios = require("axios");
 const cheerio = require("cheerio");
 const cron = require("node-cron");
@@ -12,7 +12,7 @@ const URL = "https://dealhub.fr/blog/steal-the-brainrot/toutes-les-heures-des-ev
 
 let messageId = null;
 
-// 🎯 emoji selon event + fallback auto
+// 🎯 emoji auto
 function getEmoji(name) {
   name = name.toLowerCase();
 
@@ -21,15 +21,13 @@ function getEmoji(name) {
   if (name.includes("chocolate")) return "🍫";
   if (name.includes("love")) return "❤️";
   if (name.includes("toxic")) return "☢️";
-  if (name.includes("dark")) return "🌙";
   if (name.includes("heaven")) return "☁️";
   if (name.includes("box")) return "📦";
 
-  const emojis = ["🔥", "⚡", "🌟", "💥", "🎯", "🌀", "🎮", "👾"];
-  return emojis[Math.floor(Math.random() * emojis.length)];
+  return "✨";
 }
 
-// 📥 récupération events
+// 📥 récupération events (fix doublons + parsing propre)
 async function getEvents() {
   try {
     const { data } = await axios.get(URL);
@@ -49,87 +47,86 @@ async function getEvents() {
       }
     });
 
-    return events;
+    // 🔥 SUPPRESSION DOUBLONS
+    return [...new Set(events)];
+
   } catch (err) {
-    console.error("Erreur récupération :", err);
+    console.error(err);
     return [];
   }
 }
 
-// 🔄 transformation propre
+// 🔄 parsing
 function parseEvents(events) {
   const now = new Date();
   let parsed = [];
 
   events.forEach(e => {
     const match = e.match(/(\d{1,2})h(\d{2})?\s*:\s*(.+)/);
-
     if (!match) return;
 
     let hour = parseInt(match[1]);
     let minute = match[2] ? parseInt(match[2]) : 0;
     let name = match[3].trim();
 
-    let eventDate = new Date();
-    eventDate.setHours(hour, minute, 0, 0);
+    let date = new Date();
+    date.setHours(hour, minute, 0, 0);
 
-    if (eventDate < now) {
-      eventDate.setDate(eventDate.getDate() + 1);
-    }
+    if (date < now) date.setDate(date.getDate() + 1);
 
-    parsed.push({ name, time: eventDate });
+    parsed.push({ name, time: date });
   });
 
   return parsed.sort((a, b) => a.time - b.time);
 }
 
-// 🚀 update Discord
+// 🚀 update
 async function updateDiscord() {
   const channel = await client.channels.fetch(CHANNEL_ID);
   if (!channel) return;
 
-  const rawEvents = await getEvents();
-  const events = parseEvents(rawEvents);
+  const raw = await getEvents();
+  const events = parseEvents(raw);
 
-  if (events.length === 0) {
-    await channel.send("❌ Impossible de récupérer les événements.");
-    return;
-  }
+  if (events.length === 0) return;
 
-  let content = "🌍 **EVENT TIMERS !**\n\n";
+  const embed = new EmbedBuilder()
+    .setTitle("🌍 EVENT TIMERS !")
+    .setColor(0x2b2d31)
+    .setFooter({ text: "Les compteurs sont actualisés automatiquement." });
 
   events.slice(0, 5).forEach(e => {
     const emoji = getEmoji(e.name);
-
     const now = new Date();
     const diff = e.time - now;
 
-    let line;
+    let text;
 
     if (diff <= 60000) {
-      line = "🟢 événement en cours";
+      text = "🟢 événement en cours";
     } else {
       const h = Math.floor(diff / (1000 * 60 * 60));
       const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      line = h > 0 ? `dans ${h}h ${m}m` : `dans ${m}m`;
+      text = h > 0 ? `dans ${h}h ${m}m` : `dans ${m}m`;
     }
 
-    content += `${emoji} **${e.name}**\n`;
-    content += `${line}\n\n`;
+    embed.addFields({
+      name: `${emoji} ${e.name}`,
+      value: text,
+      inline: false
+    });
   });
-
-  content += "Les compteurs sont actualisés automatiquement.";
 
   try {
     if (messageId) {
       const msg = await channel.messages.fetch(messageId);
-      await msg.edit(content);
+      await msg.edit({ embeds: [embed] });
     } else {
-      const msg = await channel.send(content);
+      const msg = await channel.send({ embeds: [embed] });
       messageId = msg.id;
     }
   } catch {
-    const msg = await channel.send(content);
+    const msg = await channel.send({ embeds: [embed] });
     messageId = msg.id;
   }
 }
@@ -139,7 +136,6 @@ client.once("ready", () => {
 
   updateDiscord();
 
-  // 🔥 update toutes les minutes
   cron.schedule("* * * * *", () => {
     updateDiscord();
   });
