@@ -12,7 +12,7 @@ const URL = "https://dealhub.fr/blog/steal-the-brainrot/toutes-les-heures-des-ev
 
 let messageId = null;
 
-// 🎯 emoji auto
+// 🎯 emoji selon event
 function getEmoji(name) {
   name = name.toLowerCase();
 
@@ -27,36 +27,57 @@ function getEmoji(name) {
   return "✨";
 }
 
-// 📥 récupération events (fix doublons + parsing propre)
+// 📥 récupération events (bonne semaine + sans doublons)
 async function getEvents() {
   try {
     const { data } = await axios.get(URL);
     const $ = cheerio.load(data);
 
+    const now = new Date();
+    const today = now.getDate();
+
     let events = [];
+    let validSection = false;
 
-    $("p, li").each((i, el) => {
-      let text = $(el).text();
+    $("h2, h3, p, li").each((i, el) => {
+      const text = $(el).text().trim();
 
-      const matches = text.match(/\d{1,2}h\d{0,2}\s*:\s*[^0-9]+/g);
+      // 🎯 détecte la bonne semaine
+      const match = text.match(/Programme du (\d{1,2}) au (\d{1,2})/i);
 
-      if (matches) {
-        matches.forEach(m => {
-          events.push(m.trim());
-        });
+      if (match) {
+        const start = parseInt(match[1]);
+        const end = parseInt(match[2]);
+
+        validSection = today >= start && today <= end;
+        return;
+      }
+
+      // si nouvelle section → stop
+      if (validSection && text.includes("Programme")) {
+        validSection = false;
+      }
+
+      // récupère uniquement la bonne section
+      if (validSection) {
+        const matches = text.match(/\d{1,2}h\d{0,2}\s*:\s*[^0-9]+/g);
+
+        if (matches) {
+          matches.forEach(m => events.push(m.trim()));
+        }
       }
     });
 
-    // 🔥 SUPPRESSION DOUBLONS
+    // 🔥 suppression doublons
     return [...new Set(events)];
 
   } catch (err) {
-    console.error(err);
+    console.error("Erreur récupération :", err);
     return [];
   }
 }
 
-// 🔄 parsing
+// 🔄 parsing events
 function parseEvents(events) {
   const now = new Date();
   let parsed = [];
@@ -80,7 +101,7 @@ function parseEvents(events) {
   return parsed.sort((a, b) => a.time - b.time);
 }
 
-// 🚀 update
+// 🚀 update discord
 async function updateDiscord() {
   const channel = await client.channels.fetch(CHANNEL_ID);
   if (!channel) return;
@@ -136,6 +157,7 @@ client.once("ready", () => {
 
   updateDiscord();
 
+  // 🔥 update toutes les minutes
   cron.schedule("* * * * *", () => {
     updateDiscord();
   });
