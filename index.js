@@ -12,6 +12,25 @@ const URL = "https://dealhub.fr/blog/steal-the-brainrot/toutes-les-heures-des-ev
 
 let messageId = null;
 
+// 🎯 emojis connus + fallback auto
+function getEmoji(name) {
+  name = name.toLowerCase();
+
+  if (name.includes("void")) return "🌑";
+  if (name.includes("lucky")) return "🍀";
+  if (name.includes("chocolate")) return "🍫";
+  if (name.includes("love")) return "❤️";
+  if (name.includes("toxic")) return "☢️";
+  if (name.includes("dark")) return "🌙";
+  if (name.includes("heaven")) return "☁️";
+  if (name.includes("box")) return "📦";
+
+  // 🎲 emoji auto pour nouveaux events
+  const emojis = ["🔥", "⚡", "🌟", "💥", "🎯", "🌀", "🎮", "👾"];
+  return emojis[Math.floor(Math.random() * emojis.length)];
+}
+
+// 📥 récupère les events depuis Dealhub
 async function getEvents() {
   try {
     const { data } = await axios.get(URL);
@@ -34,25 +53,73 @@ async function getEvents() {
   }
 }
 
+// 🔄 transforme les events
+function parseEvents(events) {
+  const now = new Date();
+  let parsed = [];
+
+  events.forEach(e => {
+    const match = e.match(/(\d{1,2})h(\d{2})?\s*:? ?(.+)/);
+
+    if (!match) return;
+
+    let hour = parseInt(match[1]);
+    let minute = match[2] ? parseInt(match[2]) : 0;
+    let name = match[3];
+
+    let eventDate = new Date();
+    eventDate.setHours(hour, minute, 0, 0);
+
+    if (eventDate < now) {
+      eventDate.setDate(eventDate.getDate() + 1);
+    }
+
+    parsed.push({
+      name,
+      time: eventDate
+    });
+  });
+
+  return parsed.sort((a, b) => a.time - b.time);
+}
+
+// ⏱️ temps restant
+function formatTimeLeft(date) {
+  const now = new Date();
+  const diff = date - now;
+
+  if (diff <= 0) return "🟢 événement en cours";
+
+  const h = Math.floor(diff / (1000 * 60 * 60));
+  const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (h > 0) return `dans ${h}h ${m}m`;
+  return `dans ${m}m`;
+}
+
+// 🚀 update discord
 async function updateDiscord() {
   const channel = await client.channels.fetch(CHANNEL_ID);
   if (!channel) return;
 
-  const events = await getEvents();
-
-  let content;
+  const rawEvents = await getEvents();
+  const events = parseEvents(rawEvents);
 
   if (events.length === 0) {
-    content = "❌ Impossible de récupérer les événements.";
-  } else {
-    content = "📅 **Événements Fortnite (auto)**\n\n";
-
-    events.forEach(e => {
-      content += `🕒 ${e}\n`;
-    });
-
-    content += "\n🔄 Mis à jour automatiquement";
+    await channel.send("❌ Impossible de récupérer les événements.");
+    return;
   }
+
+  let content = "🌍 **EVENT TIMERS !**\n\n";
+
+  events.slice(0, 5).forEach(e => {
+    const emoji = getEmoji(e.name);
+
+    content += `${emoji} **${e.name}**\n`;
+    content += `${formatTimeLeft(e.time)}\n\n`;
+  });
+
+  content += "Les compteurs sont actualisés automatiquement.";
 
   try {
     if (messageId) {
@@ -62,8 +129,7 @@ async function updateDiscord() {
       const msg = await channel.send(content);
       messageId = msg.id;
     }
-  } catch (err) {
-    console.log("Recréation du message...");
+  } catch {
     const msg = await channel.send(content);
     messageId = msg.id;
   }
@@ -74,8 +140,8 @@ client.once("ready", () => {
 
   updateDiscord();
 
-  cron.schedule("*/30 * * * *", () => {
-    console.log("Update events...");
+  // 🔥 update toutes les minutes (effet live)
+  cron.schedule("* * * * *", () => {
     updateDiscord();
   });
 });
