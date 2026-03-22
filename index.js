@@ -12,7 +12,7 @@ const URL = "https://dealhub.fr/blog/steal-the-brainrot/toutes-les-heures-des-ev
 
 let messageId = null;
 
-// 🎯 emojis connus + fallback auto
+// 🎯 emoji selon event + fallback auto
 function getEmoji(name) {
   name = name.toLowerCase();
 
@@ -25,12 +25,11 @@ function getEmoji(name) {
   if (name.includes("heaven")) return "☁️";
   if (name.includes("box")) return "📦";
 
-  // 🎲 emoji auto pour nouveaux events
   const emojis = ["🔥", "⚡", "🌟", "💥", "🎯", "🌀", "🎮", "👾"];
   return emojis[Math.floor(Math.random() * emojis.length)];
 }
 
-// 📥 récupère les events depuis Dealhub
+// 📥 récupération events
 async function getEvents() {
   try {
     const { data } = await axios.get(URL);
@@ -39,10 +38,14 @@ async function getEvents() {
     let events = [];
 
     $("p, li").each((i, el) => {
-      const text = $(el).text().trim();
+      let text = $(el).text();
 
-      if (/^\d{1,2}h/.test(text)) {
-        events.push(text);
+      const matches = text.match(/\d{1,2}h\d{0,2}\s*:\s*[^0-9]+/g);
+
+      if (matches) {
+        matches.forEach(m => {
+          events.push(m.trim());
+        });
       }
     });
 
@@ -53,19 +56,19 @@ async function getEvents() {
   }
 }
 
-// 🔄 transforme les events
+// 🔄 transformation propre
 function parseEvents(events) {
   const now = new Date();
   let parsed = [];
 
   events.forEach(e => {
-    const match = e.match(/(\d{1,2})h(\d{2})?\s*:? ?(.+)/);
+    const match = e.match(/(\d{1,2})h(\d{2})?\s*:\s*(.+)/);
 
     if (!match) return;
 
     let hour = parseInt(match[1]);
     let minute = match[2] ? parseInt(match[2]) : 0;
-    let name = match[3];
+    let name = match[3].trim();
 
     let eventDate = new Date();
     eventDate.setHours(hour, minute, 0, 0);
@@ -74,30 +77,13 @@ function parseEvents(events) {
       eventDate.setDate(eventDate.getDate() + 1);
     }
 
-    parsed.push({
-      name,
-      time: eventDate
-    });
+    parsed.push({ name, time: eventDate });
   });
 
   return parsed.sort((a, b) => a.time - b.time);
 }
 
-// ⏱️ temps restant
-function formatTimeLeft(date) {
-  const now = new Date();
-  const diff = date - now;
-
-  if (diff <= 0) return "🟢 événement en cours";
-
-  const h = Math.floor(diff / (1000 * 60 * 60));
-  const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-  if (h > 0) return `dans ${h}h ${m}m`;
-  return `dans ${m}m`;
-}
-
-// 🚀 update discord
+// 🚀 update Discord
 async function updateDiscord() {
   const channel = await client.channels.fetch(CHANNEL_ID);
   if (!channel) return;
@@ -115,8 +101,21 @@ async function updateDiscord() {
   events.slice(0, 5).forEach(e => {
     const emoji = getEmoji(e.name);
 
+    const now = new Date();
+    const diff = e.time - now;
+
+    let line;
+
+    if (diff <= 60000) {
+      line = "🟢 événement en cours";
+    } else {
+      const h = Math.floor(diff / (1000 * 60 * 60));
+      const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      line = h > 0 ? `dans ${h}h ${m}m` : `dans ${m}m`;
+    }
+
     content += `${emoji} **${e.name}**\n`;
-    content += `${formatTimeLeft(e.time)}\n\n`;
+    content += `${line}\n\n`;
   });
 
   content += "Les compteurs sont actualisés automatiquement.";
@@ -140,7 +139,7 @@ client.once("ready", () => {
 
   updateDiscord();
 
-  // 🔥 update toutes les minutes (effet live)
+  // 🔥 update toutes les minutes
   cron.schedule("* * * * *", () => {
     updateDiscord();
   });
